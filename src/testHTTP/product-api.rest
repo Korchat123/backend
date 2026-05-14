@@ -1,0 +1,21 @@
+GET http://localhost:3000/api/products
+
+###
+PUT http://localhost:3000/api/products/2
+Content-Type: application/json
+
+{
+    "name":"book2",
+    "description":"it a romance book"
+}
+###
+POST http://localhost:3000/api/products/
+Content-Type: application/json
+
+{
+    "name":"book4",
+    "description":"it a comedic book"
+}
+###
+DELETE http://localhost:3000/api/products/2
+Content-Type: application/json
