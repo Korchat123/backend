@@ -1,7 +1,10 @@
 import express from "express";
-import {users} from "./mockdata/fakeUsers.js"
+import { Router } from "express";
+import { router as apiRoutes } from "./routes/v1/index.js";
 const port=3000;
 const app=express();
+
+app.use(express.json());
 
 app.get('/',(req,res)=>{
     res.send(`<!doctype html>
@@ -37,9 +40,7 @@ app.get('/',(req,res)=>{
 
 })
 
-app.get("/users",(req,res)=>{
-         res.json(users); 
+app.use("/api",apiRoutes);
 
 
-})
 app.listen(port);

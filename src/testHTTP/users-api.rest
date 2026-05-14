@@ -1,0 +1,26 @@
+POST http://localhost:3000/api/users
+Content-Type: application/json
+   
+    {  
+        "username":"s",
+        "email":"sunsdt@hotmafwsdail.com",
+        "password":"suwqdn12asdw3"
+    }
+###
+GET http://localhost:3000/api/users
+
+###
+ 
+DELETE http://localhost:3000/api/users/5
+Content-Type: application/json  
+
+###
+PUT http://localhost:3000/api/users
+Content-Type: application/json
+   
+    {  
+        "id":2,
+        "username":"suaasdasdsn",
+        "email":"sunt@hotmasdail.com",
+        "password":"suwqdn123"
+    }
