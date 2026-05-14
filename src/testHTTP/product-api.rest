@@ -6,7 +6,9 @@ Content-Type: application/json
 
 {
     "name":"book2",
-    "description":"it a romance book"
+    "description":"it a romance book",
+    "price":"200฿"
+    
 }
 ###
 POST http://localhost:3000/api/products/
@@ -14,7 +16,8 @@ Content-Type: application/json
 
 {
     "name":"book4",
-    "description":"it a comedic book"
+    "description":"it a comedic book",
+    "price":"200฿"
 }
 ###
 DELETE http://localhost:3000/api/products/2

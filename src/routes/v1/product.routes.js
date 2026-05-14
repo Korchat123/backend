@@ -25,24 +25,21 @@ router.put("/:id",(req,res)=>{
 
 })
 router.post("/",(req,res)=>{
-    const{name,description}=req.body;
-    if(name&&description)
+    const{name,description,price}=req.body;
+    if(name&&description,price)
      {  
         const id=products.length+1;
         const product={id,name,description};   
         products.push(product);
         res.status(200).json(product)
      }else{
-        res.send('data uncomplete pls check name and description')
+        res.send('data uncomplete pls check name and description and price')
      }
 
 })
 router.delete("/:id",(req,res)=>{
     const id=parseInt(req.params.id);
     // products=products.filter((e)=>{e.id!=id})
-  
-    
-
       //  console.log(product)
         if(req.params.id&&products)
         {products.splice(id-1,1);
