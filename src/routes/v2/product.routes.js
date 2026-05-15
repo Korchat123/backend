@@ -47,6 +47,4 @@ router.delete("/:id",(req,res)=>{
         {products.splice(index,1);
         res.status(200).json(products);}
     else{res.send('cant find product')}
-   
-
 })
