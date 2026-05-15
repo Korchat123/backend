@@ -28,7 +28,8 @@ router.post("/",(req,res)=>{
     const{name,description,price}=req.body;
     if(name&&description,price)
      {  
-        const id=products.length+1;
+        //const id=products.length+1;
+        const id=(products.reduce((max,p)=>Math.max(max,Number(p.id)),0)||0)+1;
         const product={id,name,description};   
         products.push(product);
         res.status(200).json(product)
@@ -41,8 +42,10 @@ router.delete("/:id",(req,res)=>{
     const id=parseInt(req.params.id);
     // products=products.filter((e)=>{e.id!=id})
       //  console.log(product)
-        if(req.params.id&&products)
-        {products.splice(id-1,1);
+        const index=  products.findIndex(product=>(product.id===id))
+        console.log(index);
+        if(req.params.id&&products.length>0&&index!=-1)
+        {products.splice(index,1);
         res.status(200).json(products);}
     else{res.send('cant find product')}
    
