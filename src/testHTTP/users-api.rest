@@ -2,25 +2,25 @@ POST http://localhost:3000/api/v2/users
 Content-Type: application/json
    
     {  
-        "username":"s",
-        "email":"sunsdt@hotmafwsdail.com",
-        "password":"suwqdn12asdw3"
+        "username":"saaaasadada",
+        "email":"suasddadddwnsdt@hotmafwsdail.com",
+        "password":"suwsdqdnddww12asdw3"
     }
 ###
 GET http://localhost:3000/api/v2/users
 
 ###
  
-DELETE http://localhost:3000/api/v1/users/5
+DELETE http://localhost:3000/api/v2/users/6a06d26a0fd2d09deb800eca
 Content-Type: application/json  
 
 ###
-PUT http://localhost:3000/api/v1/users
+PUT http://localhost:3000/api/v2/users/6a0ad6c53e60a04f64a62d04
 Content-Type: application/json
    
     {  
-        "id":2,
-        "username":"suaasdasdsn",
+        
+        "username":"HELOOLOOOLOOO",
         "email":"sunt@hotmasdail.com",
         "password":"suwqdn123"
     }

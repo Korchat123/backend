@@ -21,7 +21,7 @@ Content-Type: application/json
 }
 
 ### Update a user (Supabase) — replace the UUID with a real id from POST response
-PUT http://localhost:3000/api/v2/users/pg/94c8e353-5755-414c-a76d-f3796e791dcf
+PUT http://localhost:3000/api/v2/users/pg/919d2cb4-3a34-4b36-80e5-387f2f92e0d6
 Content-Type: application/json
 
 {

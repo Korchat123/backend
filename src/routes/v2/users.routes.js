@@ -68,7 +68,29 @@ router.post("/",async(req,res)=>{
 
 });
 
+router.put("/:id", async(req,res)=>{
+try{
+  const doc=await User.findByIdAndUpdate(req.params.id,{ $set: req.body },{runValidators:true,returnDocument:'after'})
+if(!doc){return res.status(404).json({error:"user not found"})}
+  return res.status(200).json({success:true,data:userResponse(doc)});
+}catch(err){
+return res.status(400).json({error:err.message})
 
+}});
+
+
+router.delete("/:id", async(req,res)=>{
+
+  try{
+  const doc=await User.findByIdAndDelete(req.params.id)
+if(!doc){return res.status(404).json({error:"user not found"})}
+  return res.status(200).json({success:true,data:userResponse(doc)});
+}catch(err){
+return res.status(400).json({error:err.message})}
+
+
+
+});
 
 const PG_SELECT="id,username,email,role,created_at,updated_at";
 
@@ -117,12 +139,13 @@ router.post("/pg",async(req,res)=>{
 });
 
 router.put("/pg/:id",async (req,res)=>{
-  
+   const {username,email,password,role}=req.body;
+
   if(await isHaveUser(req.params.id)){
   try{
     const{data,error}= await supabase
       .from('users')
-      .update({username:req.body.username})
+      .update({username,email,password,role})
       .eq('id',req.params.id)
       .select(PG_SELECT)
     if(error)throw error;
