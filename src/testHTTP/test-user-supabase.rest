@@ -30,5 +30,5 @@ Content-Type: application/json
 }
 
 ### Delete a user (Supabase) — replace the UUID with a real id from POST response
-DELETE http://localhost:3000/api/v2/users/pg/e2261c6b-dd26-4e1d-8011-c0e7285c817e
+DELETE http://localhost:3000/api/v2/users/pg/6e3d4006-073e-43ac-b94a-920868e148b5
 Content-Type: application/json

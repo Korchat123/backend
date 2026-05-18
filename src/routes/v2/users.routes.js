@@ -11,9 +11,7 @@ const userResponse=(doc)=>{
 
 }
 const isHaveUser= async(id)=>{
-
   let haveUser=false;
-  
   try{
  const{data,error}= await supabase
       .from('users')
@@ -22,7 +20,7 @@ const isHaveUser= async(id)=>{
   if(error)throw error
   if(data&&data.length>0){
     haveUser=true;
-  console.log(data);
+  console.log("found",data);
   }else{
     console.log("nodata")
   }
@@ -119,9 +117,8 @@ router.post("/pg",async(req,res)=>{
 });
 
 router.put("/pg/:id",async (req,res)=>{
-let canDelete=false;
   
-  if(isHaveUser(req.params.id)){
+  if(await isHaveUser(req.params.id)){
   try{
     const{data,error}= await supabase
       .from('users')
@@ -144,7 +141,7 @@ router.delete("/pg/:id", async(req,res)=>{
  
 
   
-  if(isHaveUser(req.params.id)){
+  if(await isHaveUser(req.params.id)){
   try{
     
       const{data,error}= await supabase
