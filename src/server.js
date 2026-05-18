@@ -2,7 +2,7 @@ import express from "express";
 import { Router } from "express";
 import { router as apiRoutes } from "./routes/index.js";
 import {connectDB} from "./configs/mongodb.js";
-
+import { connectSupabase } from "./configs/supabase.js";
 const port=3000;
 const app=express();
 
@@ -46,6 +46,7 @@ app.get('/',(req,res)=>{
 })
 
 app.use("/api",apiRoutes);
-await connectDB();
 
+await connectSupabase();
+await connectDB();
 app.listen(port);
