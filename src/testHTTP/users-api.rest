@@ -1,9 +1,84 @@
-POST http://localhost:3000/api/v2/users
+@baseUrl = http://localhost:3000/api/v2/users
+@validEmail    =HELLO7@hotmafwsdail.com
+@validPassword =suwsdqdnddww12asdw3
+
+### The REST Client stores the Set-Cookie header from request #1 automatically.
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "email": "{{validEmail}}",
+    "password": "{{validPassword}}"
+}
+###
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "email": "{{validEmail}}",
+    "password": "{{validPassword}}"
+}
+###
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "email": "{{validEmail}}"
+}
+###
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "email": "{{validEmail}}",
+    "password": "wrongpassword"
+}
+###
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "email": "doesnotexist@example.com",
+    "password": "password123"
+}
+###
+GET {{baseUrl}}/auth/me
+###
+GET {{baseUrl}}/auth/me
+Cookie: accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiI2YTBlYWI1ZWQ3NzMxOGY4MDA4NzI4NjMiLCJpYXQiOjE3NzkzNDczOTEsImV4cCI6MTc3OTM1MDk5MX0.G8A1Lzuuakf8D1ChAT0PyLFV2xW5KPQL8JKdikZvBxA
+###
+GET {{baseUrl}}/auth/me
+Cookie: accessToken=
+###
+POST {{baseUrl}}/auth/logout
+
+
+
+
+
+
+
+
+
+
+
+
+###
+POST http://localhost:3000/api/v2/users/login
 Content-Type: application/json
    
     {  
-        "username":"saaaasadada",
-        "email":"suasddadddwnsdt@hotmafwsdail.com",
+        //"username":"THIS IS TESTING HASH3",
+        "email":"HELLO3@hotmafwsdail.com",
+       "password":"suwsdqdnddww12asdw3"
+    }
+###
+POST http://localhost:3000/api/v2/users/hashpass
+Content-Type: application/json
+   
+    {  
+        "username":"THIS IS TESTING HASH7",
+        "email":"HELLO7@hotmafwsdail.com",
         "password":"suwsdqdnddww12asdw3"
     }
 ###

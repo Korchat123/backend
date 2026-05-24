@@ -1,14 +1,29 @@
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+const userSchema = mongoose.Schema(
+  {
+    name: { type: String, trim: true },
+    username: { type: String, required: true, trim: true, unique: true },
+    role: { type: String, enum: ["user", "admin"], default: "user" },
+    email: { type: String, required: true, unique: true, lowercase: true },
+    password: { type: String, minlength: 8, select: false },
+    googleId: { type: String, unique: true, sparse: true },
+    profilePic: { type: String },
+    pushSubscription: { type: Object }, // Store Web Push subscription
+  },
+  { timestamps: true }
+);
 
-const userSchema=mongoose.Schema(
-    {
-        username: { type:String,required: true,trim: true,unique:true},
-        role:{type:String,enum:["user","admin"],default:"user"},
-        email:{type:String,required:true,unique:true,lowercase:true},
-        password:{type:String,required: true,minlength:8,select:false}
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password") || !this.password) {
+    return next();
+  }
+  try {
+    this.password = await bcrypt.hash(this.password, 12);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
-    },{timestamps:true}
-
-)
-
-export const User=mongoose.model("User",userSchema);
+export const User = mongoose.model("User", userSchema);
