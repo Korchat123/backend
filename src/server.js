@@ -55,6 +55,11 @@ app.get('/',(req,res)=>{
 
 app.use("/api",apiRoutes);
 
+// Catch-all route to handle undefined routes and redirect to home page
+app.all("*", (req, res) => {
+  res.redirect("/");
+});
+
 // Centralized error handling middleware - MUST BE LAST
 app.use((err, req, res, next) => {
   console.error(err.stack);
