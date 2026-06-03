@@ -14,11 +14,14 @@ const userResponse = (doc) => {
 export const googleLogin = async (req, res, next) => {
   try {
     const { token } = req.body;
+    console.log("Google Login attempt with token:", token ? "Token present" : "Token missing");
+    
     const ticket = await client.verifyIdToken({
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
     const payload = ticket.getPayload();
+    console.log("Google token verified for email:", payload.email);
     const { sub, email, name, picture } = payload;
 
     let user = await User.findOne({ $or: [{ googleId: sub }, { email }] });
@@ -73,27 +76,27 @@ export const googleLogin = async (req, res, next) => {
      const users=await User.find();
      return res.status(200).json({success:true,data:users});
     }catch(err){
-//      return res.status(400).json({success:false,error:err});
-      err.status(400);
+  //      return res.status(400).json({success:false,error:err});
+      err.status = 400;
       next(err);
     }
-}
-export const updateUser = async(req,res)=>{
-try{
+  }
+  export const updateUser = async(req,res)=>{
+  try{
   const doc=await User.findByIdAndUpdate(
     req.params.id,
     { $set: req.body },
     {runValidators:true,returnDocument:'after'}
   )
-if(!doc){return res.status(404).json({error:"user not found"})}
+  if(!doc){return res.status(404).json({error:"user not found"})}
   return res.status(200).json({success:true,data:userResponse(doc)});
-}catch(err){
-return res.status(400).json({error:err.message})
+  }catch(err){
+  return res.status(400).json({error:err.message})
 
-}}
+  }}
 
-export const createUser= async(req,res)=>{
-  
+  export const createUser= async(req,res)=>{
+
      const {username,email,password,role}=req.body;
 
   if(username&&password&&email){
@@ -103,57 +106,57 @@ export const createUser= async(req,res)=>{
     return res.status(201).json({success:true,data:userResponse(doc) })
 
     }catch(err){
-     return res.status(400).json({success:false,error:err});
+     return res.status(400).json({success:false,error:err.message});
     }
   }else {
     const err =new Error("username,email and password are required")
     err.status=400;
-    return res.status(400).json({success:false,error:err});
+    return res.status(400).json({success:false,error:err.message});
   }
 
-}
+  }
 
 
-export const createUserWithHash= async(req,res,next)=>{
+  export const createUserWithHash= async(req,res,next)=>{
   try {
     const {name,username,email,password,role}=req.body;
 
     if(!username || !email || !password) {
-      return res.status(400).json({success:false,error:"username, email and password are required"});
+      return res.status(400).json({success:false,error:"username, email and password are required"});   
     }
 
     const usernameexists=await User.findOne({username:username});
     const emailexists=await User.findOne({email:email});
 
-    if(usernameexists) return res.status(400).json({success:false,error:"username already exists"})
+    if(usernameexists) return res.status(400).json({success:false,error:"username already exists"})     
     if(emailexists) return res.status(400).json({success:false,error:"email already exists"})
 
     const doc=await User.create({name,username,email,password,role:role||'user'})
 
     return res.status(201).json({
-      success:true, 
+      success:true,
       data:userResponse(doc),
-      result:"register successful" 
+      result:"register successful"
     })
   } catch (err) {
     next(err);
   }
-}
+  }
 
 
 
 
-export const login= async(req,res,next)=>{
+  export const login= async(req,res,next)=>{
   try{
-const {username,email,password,role}=req.body||{};
+  const {username,email,password,role}=req.body||{};
 
-const userInfo=await User.findOne({email:email}).select('+password');
-//console.log(userInfo.password);
+  const userInfo=await User.findOne({email:email}).select('+password');
+  //console.log(userInfo.password);
 
-if(!userInfo||!email)return res.status(400).json({success:false,error:"email doesn't exists"})
-else if(!password){res.status(400).json({success:false,error:"please input password"})}
+  if(!userInfo||!email)return res.status(400).json({success:false,error:"email doesn't exists"})
+  else if(!password) return res.status(400).json({success:false,error:"please input password"})
   else{
-  console.log(userInfo.password,password);  
+  console.log(userInfo.password,password);
   const isPasswordCorrect=await bcrypt.compare(password,userInfo.password)
 
 console.log(isPasswordCorrect);

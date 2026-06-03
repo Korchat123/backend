@@ -19,8 +19,13 @@ app.use(cookieParser());
 
 app.use("/api",apiRoutes);
 
+// Home route to prevent infinite redirect on root
+app.get("/", (req, res) => {
+  res.json({ message: "Welcome to the Diary API" });
+});
+
 // Catch-all route to handle undefined routes and redirect to home page
-app.all('/{*splat}', (req, res) => {
+app.use((req, res) => {
   res.redirect("/");
 });
 
@@ -38,7 +43,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-await connectSupabase();
+//await connectSupabase();
 await connectDB();
 startReminderService();
 
