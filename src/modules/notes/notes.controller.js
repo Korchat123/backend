@@ -11,14 +11,19 @@ export const getNotes = async (req, res, next) => {
 
 export const createNote = async (req, res, next) => {
   try {
-    const { topic, detail, feeling, type, reminderDate, result } = req.body;
+    const { topic, detail, feeling, type, reminderKind, repeatFrequency, repeatDays, reminderDate, noticeEnabled, noticeAt, result } = req.body;
     const note = await Note.create({
       user: req.userId,
       topic,
       detail,
       feeling: feeling || 'unknown',
       type,
+      reminderKind,
+      repeatFrequency,
+      repeatDays,
       reminderDate,
+      noticeEnabled,
+      noticeAt,
       result
     });
     res.status(201).json({ success: true, data: note });

@@ -2,8 +2,6 @@ import { Note } from "../modules/notes/notes.model.js";
 import nodemailer from "nodemailer";
 import webpush from "web-push";
 
-// VAPID Keys for Web Push
-// Generate them using: webpush.generateVAPIDKeys()
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
     "mailto:example@yourdomain.com",
@@ -12,7 +10,6 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   );
 }
 
-// SMTP Configuration
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -46,53 +43,96 @@ const sendPushNotification = async (subscription, payload) => {
   }
 };
 
+const getNextRepeatingDate = (event) => {
+  if (event.reminderKind !== "daily") return null;
+
+  const sourceDate = event.noticeAt || event.reminderDate || new Date();
+  const source = new Date(sourceDate);
+  const now = new Date();
+  const repeatDays = event.repeatDays?.length ? event.repeatDays : [source.getDay()];
+  const frequency = event.repeatFrequency || "always";
+
+  const withReminderTime = (date) => {
+    const next = new Date(date);
+    next.setHours(source.getHours(), source.getMinutes(), 0, 0);
+    return next;
+  };
+
+  if (frequency === "monthly" || frequency === "yearly") {
+    const candidate = new Date(source);
+    do {
+      if (frequency === "monthly") {
+        candidate.setMonth(candidate.getMonth() + 1);
+      } else {
+        candidate.setFullYear(candidate.getFullYear() + 1);
+      }
+    } while (withReminderTime(candidate) <= now);
+
+    for (let offset = 0; offset < 7; offset += 1) {
+      const next = withReminderTime(candidate);
+      next.setDate(candidate.getDate() + offset);
+      if (next > now && repeatDays.includes(next.getDay())) return next;
+    }
+
+    return withReminderTime(candidate);
+  }
+
+  for (let offset = 1; offset <= 14; offset += 1) {
+    const next = withReminderTime(now);
+    next.setDate(now.getDate() + offset);
+    if (next > now && repeatDays.includes(next.getDay())) return next;
+  }
+
+  return null;
+};
+
 export const startReminderService = () => {
-  console.log("Reminder service started ⏰ (Email & Push supported)");
+  console.log("Reminder service started (Email & Push supported)");
 
   setInterval(async () => {
     try {
       const now = new Date();
-      const startOfToday = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
-      const endOfToday = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        23,
-        59,
-        59
-      );
-
-      const todaysEvents = await Note.find({
-        reminderDate: { $gte: startOfToday, $lte: endOfToday },
+      const dueEvents = await Note.find({
+        noticeEnabled: true,
+        noticeSentAt: null,
+        $or: [
+          { noticeAt: { $lte: now } },
+          { noticeAt: { $exists: false }, reminderDate: { $lte: now } },
+        ],
       }).populate("user");
 
-      for (const event of todaysEvents) {
-        const message = `📢 Today: "${event.topic}" at ${new Date(
-          event.reminderDate
-        ).toLocaleTimeString()}`;
+      for (const event of dueEvents) {
+        const eventTime = event.reminderDate ? new Date(event.reminderDate) : now;
+        const message = `Reminder: "${event.topic}" at ${eventTime.toLocaleString()}`;
 
         console.log(`[REMINDER] ${message}`);
 
-        // 1. Send Email
-        if (event.user.email) {
+        if (event.user?.email) {
           await sendEmail(event.user.email, `Reminder: ${event.topic}`, message);
         }
 
-        // 2. Send Push Notification
-        if (event.user.pushSubscription) {
+        if (event.user?.pushSubscription) {
           await sendPushNotification(event.user.pushSubscription, {
             title: "Diary Reminder",
             body: message,
-            url: "/dashboard",
+            url: "/",
           });
         }
+
+        const nextRepeatingDate = getNextRepeatingDate(event);
+
+        if (nextRepeatingDate) {
+          event.reminderDate = nextRepeatingDate;
+          event.noticeAt = nextRepeatingDate;
+          event.noticeSentAt = null;
+        } else {
+          event.noticeSentAt = now;
+        }
+
+        await event.save();
       }
     } catch (err) {
       console.error("Service error:", err);
     }
-  }, 1000 * 60 * 60);
+  }, 1000 * 60);
 };

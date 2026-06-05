@@ -12,7 +12,7 @@ const noteSchema = new mongoose.Schema({
   },
   detail: {
     type: String,
-    required: true
+    default: ''
   },
   result: {
     type: String
@@ -25,10 +25,40 @@ const noteSchema = new mongoose.Schema({
   reminderDate: {
     type: Date
   },
+  noticeEnabled: {
+    type: Boolean,
+    default: true
+  },
+  noticeAt: {
+    type: Date
+  },
+  noticeSentAt: {
+    type: Date
+  },
   type: {
     type: String,
     enum: ['diary', 'reminder'],
     default: 'diary'
+  },
+  reminderKind: {
+    type: String,
+    enum: ['event', 'daily'],
+    default: 'event'
+  },
+  repeatFrequency: {
+    type: String,
+    enum: ['weekly', 'monthly', 'yearly', 'always'],
+    default: 'always'
+  },
+  repeatDays: {
+    type: [Number],
+    default: undefined,
+    validate: {
+      validator(days) {
+        return !days || days.every(day => Number.isInteger(day) && day >= 0 && day <= 6);
+      },
+      message: 'Repeat days must be numbers from 0 to 6'
+    }
   },
   createdAt: {
     type: Date,
