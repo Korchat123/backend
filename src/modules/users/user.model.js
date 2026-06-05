@@ -10,6 +10,7 @@ const userSchema = mongoose.Schema(
     googleId: { type: String, unique: true, sparse: true },
     profilePic: { type: String },
     pushSubscription: { type: Object }, // Store Web Push subscription
+    timeZone: { type: String },
   },
   { timestamps: true }
 );

@@ -43,44 +43,117 @@ const sendPushNotification = async (subscription, payload) => {
   }
 };
 
+const getTimeZone = (event) => event.userTimeZone || event.user?.timeZone || "UTC";
+
+const getZonedParts = (dateInput, timeZone) => {
+  const date = new Date(dateInput);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    weekday: "short",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const weekdays = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second),
+    weekday: weekdays[values.weekday],
+  };
+};
+
+const getTimeZoneOffset = (date, timeZone) => {
+  const parts = getZonedParts(date, timeZone);
+  const localAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+
+  return localAsUtc - date.getTime();
+};
+
+const zonedDateTimeToDate = ({ year, month, day, hour, minute }, timeZone) => {
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  const firstPass = new Date(utcGuess - getTimeZoneOffset(new Date(utcGuess), timeZone));
+  return new Date(utcGuess - getTimeZoneOffset(firstPass, timeZone));
+};
+
+const formatEventTime = (dateInput, timeZone) => (
+  new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(dateInput))
+);
+
 const getNextRepeatingDate = (event) => {
   if (event.reminderKind !== "daily") return null;
 
   const sourceDate = event.noticeAt || event.reminderDate || new Date();
-  const source = new Date(sourceDate);
   const now = new Date();
-  const repeatDays = event.repeatDays?.length ? event.repeatDays : [source.getDay()];
+  const timeZone = getTimeZone(event);
+  const sourceParts = getZonedParts(sourceDate, timeZone);
+  const nowParts = getZonedParts(now, timeZone);
+  const repeatDays = event.repeatDays?.length ? event.repeatDays : [sourceParts.weekday];
   const frequency = event.repeatFrequency || "always";
 
-  const withReminderTime = (date) => {
-    const next = new Date(date);
-    next.setHours(source.getHours(), source.getMinutes(), 0, 0);
-    return next;
+  const fromLocalParts = (parts) => zonedDateTimeToDate({
+    ...parts,
+    hour: sourceParts.hour,
+    minute: sourceParts.minute,
+  }, timeZone);
+
+  const addLocalDays = (parts, days) => {
+    const localDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+    return {
+      year: localDate.getUTCFullYear(),
+      month: localDate.getUTCMonth() + 1,
+      day: localDate.getUTCDate(),
+    };
   };
 
   if (frequency === "monthly" || frequency === "yearly") {
-    const candidate = new Date(source);
+    const candidate = { ...sourceParts };
     do {
       if (frequency === "monthly") {
-        candidate.setMonth(candidate.getMonth() + 1);
+        candidate.month += 1;
+        while (candidate.month > 12) {
+          candidate.month -= 12;
+          candidate.year += 1;
+        }
       } else {
-        candidate.setFullYear(candidate.getFullYear() + 1);
+        candidate.year += 1;
       }
-    } while (withReminderTime(candidate) <= now);
+    } while (fromLocalParts(candidate) <= now);
 
     for (let offset = 0; offset < 7; offset += 1) {
-      const next = withReminderTime(candidate);
-      next.setDate(candidate.getDate() + offset);
-      if (next > now && repeatDays.includes(next.getDay())) return next;
+      const localParts = addLocalDays(candidate, offset);
+      const next = fromLocalParts(localParts);
+      if (next > now && repeatDays.includes(getZonedParts(next, timeZone).weekday)) return next;
     }
 
-    return withReminderTime(candidate);
+    return fromLocalParts(candidate);
   }
 
   for (let offset = 1; offset <= 14; offset += 1) {
-    const next = withReminderTime(now);
-    next.setDate(now.getDate() + offset);
-    if (next > now && repeatDays.includes(next.getDay())) return next;
+    const localParts = addLocalDays(nowParts, offset);
+    const next = fromLocalParts(localParts);
+    if (next > now && repeatDays.includes(getZonedParts(next, timeZone).weekday)) return next;
   }
 
   return null;
@@ -103,7 +176,8 @@ export const startReminderService = () => {
 
       for (const event of dueEvents) {
         const eventTime = event.reminderDate ? new Date(event.reminderDate) : now;
-        const message = `Reminder: "${event.topic}" at ${eventTime.toLocaleString()}`;
+        const timeZone = getTimeZone(event);
+        const message = `Reminder: "${event.topic}" at ${formatEventTime(eventTime, timeZone)}`;
 
         console.log(`[REMINDER] ${message}`);
 
@@ -115,6 +189,9 @@ export const startReminderService = () => {
           await sendPushNotification(event.user.pushSubscription, {
             title: "Diary Reminder",
             body: message,
+            eventAt: event.reminderDate?.toISOString(),
+            noticeAt: event.noticeAt?.toISOString(),
+            timeZone,
             url: "/",
           });
         }

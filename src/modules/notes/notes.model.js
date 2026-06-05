@@ -35,6 +35,9 @@ const noteSchema = new mongoose.Schema({
   noticeSentAt: {
     type: Date
   },
+  userTimeZone: {
+    type: String
+  },
   type: {
     type: String,
     enum: ['diary', 'reminder'],

@@ -63,8 +63,8 @@ router.post("/auth/logout", (req, res, next) => {
 
 router.put("/subscribe", authUser, async (req, res, next) => {
   try {
-    const { subscription } = req.body;
-    await User.findByIdAndUpdate(req.userId, { pushSubscription: subscription });
+    const { subscription, timeZone } = req.body;
+    await User.findByIdAndUpdate(req.userId, { pushSubscription: subscription, timeZone });
     res.status(200).json({ success: true, message: "Subscribed to push notifications" });
   } catch (err) {
     next(err);
