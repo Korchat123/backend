@@ -4,7 +4,6 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import { router as apiRoutes } from "./routes/index.js";
 import {connectDB} from "./configs/mongodb.js";
-import { connectSupabase } from "./configs/supabase.js";
 import { startReminderService } from "./utils/reminderService.js";
 
 const port=3000;
@@ -47,7 +46,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-//await connectSupabase();
+//await connectDB();
 await connectDB();
 startReminderService();
 
