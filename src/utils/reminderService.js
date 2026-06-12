@@ -35,11 +35,21 @@ const sendEmail = async (to, subject, text) => {
 
 const sendPushNotification = async (subscription, payload) => {
   try {
-    if (!subscription || !process.env.VAPID_PUBLIC_KEY) return;
+    if (!subscription) return { sent: false, expired: false };
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+      console.warn("Push skipped: missing VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY");
+      return { sent: false, expired: false };
+    }
+
     await webpush.sendNotification(subscription, JSON.stringify(payload));
     console.log("Push notification sent successfully");
+    return { sent: true, expired: false };
   } catch (error) {
     console.error("Push error:", error);
+    return {
+      sent: false,
+      expired: error.statusCode === 404 || error.statusCode === 410,
+    };
   }
 };
 
@@ -101,11 +111,11 @@ const formatEventTime = (dateInput, timeZone) => (
   }).format(new Date(dateInput))
 );
 
-const getNextRepeatingDate = (event) => {
+export const getNextRepeatingDate = (event, fromDate = new Date()) => {
   if (event.reminderKind !== "daily") return null;
 
   const sourceDate = event.noticeAt || event.reminderDate || new Date();
-  const now = new Date();
+  const now = new Date(fromDate);
   const timeZone = getTimeZone(event);
   const sourceParts = getZonedParts(sourceDate, timeZone);
   const nowParts = getZonedParts(now, timeZone);
@@ -159,57 +169,68 @@ const getNextRepeatingDate = (event) => {
   return null;
 };
 
+const processDueReminders = async () => {
+  try {
+    const now = new Date();
+    const dueEvents = await Note.find({
+      noticeEnabled: true,
+      noticeSentAt: null,
+      $or: [
+        { noticeAt: { $lte: now } },
+        { noticeAt: { $exists: false }, reminderDate: { $lte: now } },
+      ],
+    }).populate("user");
+
+    for (const event of dueEvents) {
+      const eventTime = event.reminderDate ? new Date(event.reminderDate) : now;
+      const timeZone = getTimeZone(event);
+      const message = `Reminder: "${event.topic}" at ${formatEventTime(eventTime, timeZone)}`;
+
+      console.log(`[REMINDER] ${message}`);
+
+      if (event.user?.email) {
+        await sendEmail(event.user.email, `Reminder: ${event.topic}`, message);
+      }
+
+      if (event.user?.pushSubscription) {
+        const result = await sendPushNotification(event.user.pushSubscription, {
+          title: "Diary Reminder",
+          body: message,
+          noteId: event._id.toString(),
+          eventAt: event.reminderDate?.toISOString(),
+          noticeAt: event.noticeAt?.toISOString(),
+          timeZone,
+          actionUrl: `${process.env.API_BASE_URL || "http://localhost:3000"}/api/v2/notes/${event._id}/reminder-action`,
+          url: "/",
+        });
+
+        if (result.expired) {
+          event.user.pushSubscription = undefined;
+          await event.user.save();
+        }
+      } else {
+        console.warn(`[REMINDER] No push subscription for user ${event.user?._id || "unknown"}`);
+      }
+
+      const nextRepeatingDate = getNextRepeatingDate(event);
+
+      if (nextRepeatingDate) {
+        event.reminderDate = nextRepeatingDate;
+        event.noticeAt = nextRepeatingDate;
+        event.noticeSentAt = null;
+      } else {
+        event.noticeSentAt = now;
+      }
+
+      await event.save();
+    }
+  } catch (err) {
+    console.error("Service error:", err);
+  }
+};
+
 export const startReminderService = () => {
   console.log("Reminder service started (Email & Push supported)");
-
-  setInterval(async () => {
-    try {
-      const now = new Date();
-      const dueEvents = await Note.find({
-        noticeEnabled: true,
-        noticeSentAt: null,
-        $or: [
-          { noticeAt: { $lte: now } },
-          { noticeAt: { $exists: false }, reminderDate: { $lte: now } },
-        ],
-      }).populate("user");
-
-      for (const event of dueEvents) {
-        const eventTime = event.reminderDate ? new Date(event.reminderDate) : now;
-        const timeZone = getTimeZone(event);
-        const message = `Reminder: "${event.topic}" at ${formatEventTime(eventTime, timeZone)}`;
-
-        console.log(`[REMINDER] ${message}`);
-
-        if (event.user?.email) {
-          await sendEmail(event.user.email, `Reminder: ${event.topic}`, message);
-        }
-
-        if (event.user?.pushSubscription) {
-          await sendPushNotification(event.user.pushSubscription, {
-            title: "Diary Reminder",
-            body: message,
-            eventAt: event.reminderDate?.toISOString(),
-            noticeAt: event.noticeAt?.toISOString(),
-            timeZone,
-            url: "/",
-          });
-        }
-
-        const nextRepeatingDate = getNextRepeatingDate(event);
-
-        if (nextRepeatingDate) {
-          event.reminderDate = nextRepeatingDate;
-          event.noticeAt = nextRepeatingDate;
-          event.noticeSentAt = null;
-        } else {
-          event.noticeSentAt = now;
-        }
-
-        await event.save();
-      }
-    } catch (err) {
-      console.error("Service error:", err);
-    }
-  }, 1000 * 60);
+  processDueReminders();
+  setInterval(processDueReminders, 1000 * 60);
 };
