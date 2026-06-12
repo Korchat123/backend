@@ -1,6 +1,7 @@
 import { Note } from "../modules/notes/notes.model.js";
 import nodemailer from "nodemailer";
 import webpush from "web-push";
+import jwt from "jsonwebtoken";
 
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
@@ -172,19 +173,43 @@ export const getNextRepeatingDate = (event, fromDate = new Date()) => {
 const processDueReminders = async () => {
   try {
     const now = new Date();
-    const dueEvents = await Note.find({
-      noticeEnabled: true,
-      noticeSentAt: null,
-      $or: [
-        { noticeAt: { $lte: now } },
-        { noticeAt: { $exists: false }, reminderDate: { $lte: now } },
-      ],
-    }).populate("user");
+    const claimExpiredAt = new Date(now.getTime() - 5 * 60 * 1000);
 
-    for (const event of dueEvents) {
+    while (true) {
+      const event = await Note.findOneAndUpdate(
+        {
+          noticeEnabled: true,
+          noticeSentAt: null,
+          $and: [
+            {
+              $or: [
+                { reminderProcessingAt: null },
+                { reminderProcessingAt: { $exists: false } },
+                { reminderProcessingAt: { $lte: claimExpiredAt } },
+              ],
+            },
+            {
+              $or: [
+                { noticeAt: { $lte: now } },
+                { noticeAt: { $exists: false }, reminderDate: { $lte: now } },
+              ],
+            },
+          ],
+        },
+        { $set: { reminderProcessingAt: now } },
+        { returnDocument: "after" }
+      ).populate("user");
+
+      if (!event) break;
+
       const eventTime = event.reminderDate ? new Date(event.reminderDate) : now;
       const timeZone = getTimeZone(event);
       const message = `Reminder: "${event.topic}" at ${formatEventTime(eventTime, timeZone)}`;
+      const actionToken = jwt.sign(
+        { noteId: event._id.toString(), userId: event.user?._id?.toString() },
+        process.env.JWT_SECRET,
+        { expiresIn: "3d" }
+      );
 
       console.log(`[REMINDER] ${message}`);
 
@@ -200,7 +225,8 @@ const processDueReminders = async () => {
           eventAt: event.reminderDate?.toISOString(),
           noticeAt: event.noticeAt?.toISOString(),
           timeZone,
-          actionUrl: `${process.env.API_BASE_URL || "http://localhost:3000"}/api/v2/notes/${event._id}/reminder-action`,
+          actionToken,
+          actionUrl: `${process.env.API_BASE_URL || "http://localhost:3000"}/api/v2/notes/${event._id}/reminder-action/public`,
           url: "/",
         });
 
@@ -218,8 +244,10 @@ const processDueReminders = async () => {
         event.reminderDate = nextRepeatingDate;
         event.noticeAt = nextRepeatingDate;
         event.noticeSentAt = null;
+        event.reminderProcessingAt = null;
       } else {
         event.noticeSentAt = now;
+        event.reminderProcessingAt = null;
       }
 
       await event.save();

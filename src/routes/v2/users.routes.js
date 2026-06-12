@@ -9,13 +9,13 @@ import {
   confirmRegistration,
   getPendingRegistrations,
   deletePendingRegistration,
+  getRegistrationSettings,
+  updateRegistrationSettings,
   login,
   googleLogin,
 } from "../../modules/users/users.v2.controller.js";
 import { authUser } from "../../middlewares/auth.js";
 export const router = Router();
-
-const PG_SELECT = "id,username,email,role,created_at,updated_at";
 
 const adminOnly = async (req, res, next) => {
   try {
@@ -29,13 +29,14 @@ const adminOnly = async (req, res, next) => {
   }
 };
 
-router.get("/", getUsers);
-
-router.post("/", createUser);
+router.get("/", authUser, adminOnly, getUsers);
+router.post("/", authUser, adminOnly, createUser);
 router.post("/hashpass/", createUserWithHash);
 router.post("/confirm-registration", confirmRegistration);
 router.post("/login", login);
 router.post("/google-login", googleLogin);
+router.get("/registration-settings", authUser, adminOnly, getRegistrationSettings);
+router.put("/registration-settings", authUser, adminOnly, updateRegistrationSettings);
 router.get("/pending-registrations", authUser, adminOnly, getPendingRegistrations);
 router.delete("/pending-registrations/:id", authUser, adminOnly, deletePendingRegistration);
 
@@ -82,6 +83,22 @@ router.post("/auth/logout", (req, res, next) => {
 router.put("/subscribe", authUser, async (req, res, next) => {
   try {
     const { subscription, timeZone } = req.body;
+    const isValidSubscription = subscription &&
+      typeof subscription.endpoint === "string" &&
+      subscription.keys &&
+      typeof subscription.keys.p256dh === "string" &&
+      typeof subscription.keys.auth === "string";
+
+    if (!isValidSubscription) {
+      return res.status(400).json({ success: false, error: "Invalid push subscription" });
+    }
+
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone });
+    } catch {
+      return res.status(400).json({ success: false, error: "Invalid time zone" });
+    }
+
     await User.findByIdAndUpdate(req.userId, { pushSubscription: subscription, timeZone });
     res.status(200).json({ success: true, message: "Subscribed to push notifications" });
   } catch (err) {
@@ -89,6 +106,5 @@ router.put("/subscribe", authUser, async (req, res, next) => {
   }
 });
 
-router.put("/:id", updateUser);
-
-router.delete("/:id", deleteUser);
+router.put("/:id", authUser, adminOnly, updateUser);
+router.delete("/:id", authUser, adminOnly, deleteUser);

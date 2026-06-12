@@ -9,6 +9,12 @@ const decodedToken=jwt.verify(token,process.env.JWT_SECRET)
 req.userId = decodedToken.userId;
 next();
 }catch(err){
+    if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({ success: false, message: 'Session expired' });
+    }
+    if (err.name === 'JsonWebTokenError') {
+        return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
     next(err);
 }
 

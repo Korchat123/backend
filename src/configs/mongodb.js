@@ -9,6 +9,7 @@ try{
 
 }catch(err){
     console.error("mongodb connection error");
+    throw err;
     
 }
 

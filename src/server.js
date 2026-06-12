@@ -1,5 +1,4 @@
 import express from "express";
-import { Router } from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { router as apiRoutes } from "./routes/index.js";
@@ -27,22 +26,36 @@ app.get("/", (req, res) => {
   res.json({ message: "Welcome to the Diary API" });
 });
 
-// Catch-all route to handle undefined routes and redirect to home page
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "API route not found",
+    path: req.originalUrl,
+  });
+});
+
+// Catch-all route to handle undefined browser routes and redirect to home page
 app.use((req, res) => {
   res.redirect("/");
 });
 
 // Centralized error handling middleware - MUST BE LAST
 app.use((err, req, res, next) => {
+  const isProd = process.env.NODE_ENV === "production";
+  const status = err.status || err.statusCode || 500;
+  const message = status >= 500 && isProd
+    ? "Internal Server Error"
+    : err.message || "Internal Server Error!";
+
   console.error(err.stack);
-  res.status(err.status || 500).json({
+  res.status(status).json({
     success: false,
-    error: err.message || "Internal Server Error!",
-    message: err.message || "Internal Server Error!",
+    error: message,
+    message,
     path: req.originalUrl,
     method: req.method,
     timestamp: new Date().toISOString(),
-    stack: err.stack,
+    ...(isProd ? {} : { stack: err.stack }),
   });
 });
 

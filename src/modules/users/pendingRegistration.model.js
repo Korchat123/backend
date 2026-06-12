@@ -14,6 +14,10 @@ const pendingRegistrationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+pendingRegistrationSchema.index({ email: 1 });
+pendingRegistrationSchema.index({ username: 1 });
+pendingRegistrationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 export const PendingRegistration = mongoose.model(
   "PendingRegistration",
   pendingRegistrationSchema

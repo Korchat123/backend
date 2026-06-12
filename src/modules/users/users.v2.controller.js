@@ -1,5 +1,6 @@
 import { User } from "./user.model.js";
 import { PendingRegistration } from "./pendingRegistration.model.js";
+import { AuthSettings } from "./authSettings.model.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -7,9 +8,17 @@ import nodemailer from "nodemailer";
 import { OAuth2Client } from "google-auth-library";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const REGISTRATION_CONFIRMATION_WINDOW_MS = 60 * 1000;
+const DEFAULT_REGISTRATION_EXPIRE_MINUTES = 15;
 
 const tokenHash = (token) => crypto.createHash("sha256").update(token).digest("hex");
+
+const getAuthSettings = async () => (
+  AuthSettings.findOneAndUpdate(
+    { key: "auth" },
+    { $setOnInsert: { registrationExpireMinutes: DEFAULT_REGISTRATION_EXPIRE_MINUTES } },
+    { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
+  )
+);
 
 const getFrontendUrl = (req) => (
   process.env.FRONTEND_URL ||
@@ -18,7 +27,7 @@ const getFrontendUrl = (req) => (
   "http://localhost:5173"
 ).replace(/\/$/, "");
 
-const sendRegistrationEmail = async (to, confirmationUrl) => {
+const sendRegistrationEmail = async (to, confirmationUrl, expireMinutes) => {
   if (
     !process.env.EMAIL_USER ||
     !process.env.EMAIL_PASS ||
@@ -42,9 +51,9 @@ const sendRegistrationEmail = async (to, confirmationUrl) => {
       from: `"Diary App" <${process.env.EMAIL_USER}>`,
       to,
       subject: "Confirm your Diary App registration",
-      text: `Confirm your registration within 1 minute: ${confirmationUrl}`,
+      text: `Confirm your registration within ${expireMinutes} minute${expireMinutes === 1 ? "" : "s"}: ${confirmationUrl}`,
       html: `
-        <p>Confirm your Diary App registration within 1 minute.</p>
+        <p>Confirm your Diary App registration within ${expireMinutes} minute${expireMinutes === 1 ? "" : "s"}.</p>
         <p><a href="${confirmationUrl}">Confirm registration</a></p>
       `,
     });
@@ -135,9 +144,14 @@ export const googleLogin = async (req, res, next) => {
   }
   export const updateUser = async(req,res)=>{
   try{
+  const allowedUpdates = {};
+  for (const field of ["name", "username", "email", "role"]) {
+    if (req.body[field] !== undefined) allowedUpdates[field] = req.body[field];
+  }
+
   const doc=await User.findByIdAndUpdate(
     req.params.id,
-    { $set: req.body },
+    { $set: allowedUpdates },
     {runValidators:true,returnDocument:'after'}
   )
   if(!doc){return res.status(404).json({error:"user not found"})}
@@ -149,12 +163,12 @@ export const googleLogin = async (req, res, next) => {
 
   export const createUser= async(req,res)=>{
 
-     const {username,email,password,role}=req.body;
+     const {name,username,email,password,role}=req.body;
 
   if(username&&password&&email){
     try{
 
-    const doc=await User.create({username,email,password,role});
+    const doc=await User.create({name,username,email,password,role:role||"user"});
     return res.status(201).json({success:true,data:userResponse(doc) })
 
     }catch(err){
@@ -204,6 +218,8 @@ export const googleLogin = async (req, res, next) => {
     const confirmationToken = crypto.randomBytes(32).toString("hex");
     const confirmationUrl = `${getFrontendUrl(req)}/confirm-registration?token=${confirmationToken}`;
     const passwordHash = await bcrypt.hash(password, 12);
+    const authSettings = await getAuthSettings();
+    const expireMinutes = authSettings.registrationExpireMinutes || DEFAULT_REGISTRATION_EXPIRE_MINUTES;
 
     await PendingRegistration.create({
       name,
@@ -212,10 +228,10 @@ export const googleLogin = async (req, res, next) => {
       passwordHash,
       role: "user",
       tokenHash: tokenHash(confirmationToken),
-      expiresAt: new Date(now.getTime() + REGISTRATION_CONFIRMATION_WINDOW_MS),
+      expiresAt: new Date(now.getTime() + expireMinutes * 60 * 1000),
     });
 
-    const emailSent = await sendRegistrationEmail(email, confirmationUrl);
+    const emailSent = await sendRegistrationEmail(email, confirmationUrl, expireMinutes);
 
     await PendingRegistration.updateOne(
       { tokenHash: tokenHash(confirmationToken) },
@@ -225,7 +241,7 @@ export const googleLogin = async (req, res, next) => {
     return res.status(202).json({
       success:true,
       message: emailSent
-        ? "Check your email to confirm registration within 1 minute."
+        ? `Check your email to confirm registration within ${expireMinutes} minute${expireMinutes === 1 ? "" : "s"}.`
         : "Registration is pending. Email is not configured, so check the backend console for the confirmation link.",
     })
   } catch (err) {
@@ -241,39 +257,40 @@ export const googleLogin = async (req, res, next) => {
       return res.status(400).json({ success: false, error: "confirmation token is required" });
     }
 
-    const pending = await PendingRegistration.findOne({ tokenHash: tokenHash(token) });
+    const now = new Date();
+    const pending = await PendingRegistration.findOneAndDelete({
+      tokenHash: tokenHash(token),
+      expiresAt: { $gt: now },
+    });
 
     if (!pending) {
+      const expired = await PendingRegistration.findOne({ tokenHash: tokenHash(token) });
+      if (expired) {
+        return res.status(410).json({ success: false, error: "registration link expired" });
+      }
       return res.status(404).json({ success: false, error: "registration request not found" });
-    }
-
-    if (pending.expiresAt <= new Date()) {
-      return res.status(410).json({ success: false, error: "registration link expired" });
     }
 
     const usernameexists = await User.findOne({ username: pending.username });
     const emailexists = await User.findOne({ email: pending.email });
 
     if (usernameexists || emailexists) {
-      await PendingRegistration.findByIdAndDelete(pending._id);
       return res.status(409).json({
         success: false,
         error: usernameexists ? "username already exists" : "email already exists",
       });
     }
 
-    const now = new Date();
+    const createdAt = new Date();
     const result = await User.collection.insertOne({
       name: pending.name,
       username: pending.username,
       email: pending.email,
       password: pending.passwordHash,
       role: pending.role || "user",
-      createdAt: now,
-      updatedAt: now,
+      createdAt,
+      updatedAt: createdAt,
     });
-
-    await PendingRegistration.findByIdAndDelete(pending._id);
 
     return res.status(201).json({
       success: true,
@@ -284,6 +301,51 @@ export const googleLogin = async (req, res, next) => {
         email: pending.email,
         role: pending.role || "user",
         name: pending.name,
+      },
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, error: "username or email already exists" });
+    }
+    next(err);
+  }
+  };
+
+  export const getRegistrationSettings = async (req, res, next) => {
+  try {
+    const settings = await getAuthSettings();
+    return res.status(200).json({
+      success: true,
+      data: {
+        registrationExpireMinutes: settings.registrationExpireMinutes,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+  };
+
+  export const updateRegistrationSettings = async (req, res, next) => {
+  try {
+    const registrationExpireMinutes = Number(req.body?.registrationExpireMinutes);
+
+    if (!Number.isInteger(registrationExpireMinutes) || registrationExpireMinutes < 1 || registrationExpireMinutes > 1440) {
+      return res.status(400).json({
+        success: false,
+        error: "registrationExpireMinutes must be an integer from 1 to 1440",
+      });
+    }
+
+    const settings = await AuthSettings.findOneAndUpdate(
+      { key: "auth" },
+      { $set: { registrationExpireMinutes } },
+      { returnDocument: "after", upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        registrationExpireMinutes: settings.registrationExpireMinutes,
       },
     });
   } catch (err) {
@@ -331,18 +393,14 @@ export const googleLogin = async (req, res, next) => {
   const {username,email,password,role}=req.body||{};
 
   const userInfo=await User.findOne({email:email}).select('+password');
-  //console.log(userInfo.password);
 
   if(!userInfo||!email)return res.status(400).json({success:false,error:"email doesn't exists"})
   else if(!password) return res.status(400).json({success:false,error:"please input password"})
   else{
-  console.log(userInfo.password,password);
   const isPasswordCorrect=await bcrypt.compare(password,userInfo.password)
 
-console.log(isPasswordCorrect);
    if(isPasswordCorrect){
 const token =jwt.sign({userId:userInfo._id},process.env.JWT_SECRET,{expiresIn:"1h"})
-console.log(token);
 const isProd=process.env.NODE_ENV==="production";
 res.cookie('accessToken',token,{
   httpOnly:true,

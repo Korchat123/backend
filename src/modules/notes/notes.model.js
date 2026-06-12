@@ -35,6 +35,9 @@ const noteSchema = new mongoose.Schema({
   noticeSentAt: {
     type: Date
   },
+  reminderProcessingAt: {
+    type: Date
+  },
   userTimeZone: {
     type: String
   },
