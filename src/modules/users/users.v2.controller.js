@@ -196,6 +196,11 @@ export const googleLogin = async (req, res, next) => {
       });
     }
 
+    await PendingRegistration.deleteMany({
+      expiresAt: { $lte: now },
+      $or: [{ username }, { email }],
+    });
+
     const confirmationToken = crypto.randomBytes(32).toString("hex");
     const confirmationUrl = `${getFrontendUrl(req)}/confirm-registration?token=${confirmationToken}`;
     const passwordHash = await bcrypt.hash(password, 12);
